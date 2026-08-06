@@ -90,7 +90,22 @@
   }
   @keyframes shimmer { to { background-position: -200% 0; } }
   .result { display: none; flex-direction: column; gap: 10px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; position: relative; }
+  
+  /* ESTILO PARA EL BANNER DE ERROR */
+  #not-found-banner {
+    display: none;
+    background: rgba(248,113,113,0.15);
+    color: var(--red);
+    border-bottom: 1px solid rgba(248,113,113,0.25);
+    padding: 14px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+
   .node-header { padding: 24px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .node-name { font-size: 28px; font-weight: 500; color: var(--accent); letter-spacing: -0.5px; line-height: 1.2; }
   .avail-badge { flex-shrink: 0; font-size: 16px; font-weight: 500; padding: 10px 16px; border-radius: 10px; letter-spacing: 1px; text-align: center; line-height: 1.3; }
@@ -113,7 +128,6 @@
   .copy-btn.copied { color: var(--green); border-color: rgba(52,211,153,0.3); }
   .coords { font-size: 13px; color: var(--muted); margin-top: 10px; letter-spacing: 0.5px; }
   
-  /* Nuevo estilo para la ubicación */
   .ubicacion-text { font-size: 13px; color: var(--accent); margin-top: 6px; letter-spacing: 0.5px; font-weight: 500; }
   
   .maps-btn {
@@ -147,7 +161,6 @@
   .btn-scan:hover { background: var(--accent); color: #000; border-style: solid; }
   .btn-scan svg { width: 20px; height: 20px; fill: currentColor; }
 
-  /* Vista de Carga / Sincronización */
   #setup-view {
     display: none; flex-direction: column; align-items: center; justify-content: center;
     padding: 40px 20px; background: var(--card); border-radius: 16px;
@@ -176,13 +189,11 @@
     <button class="btn-update-csv" id="btnUpdateHeader" onclick="fetchCSVFromGitHub(true)">↻ Actualizar Base</button>
   </header>
 
-  <!-- PANTALLA DE CARGA INICIAL -->
   <div id="setup-view">
     <h2>Sincronizando...</h2>
     <p>Descargando base de datos desde GitHub, por favor espera.</p>
   </div>
 
-  <!-- APLICACIÓN PRINCIPAL -->
   <div id="app-view" style="display: none; width: 100%; flex-direction: column; gap: 12px;">
     
     <div id="reader-wrapper" style="display: none; width: 100%; margin-bottom: 12px;">
@@ -215,6 +226,12 @@
 
     <div class="result" id="result">
       <div class="card anim">
+        
+        <!-- BANNER DE ADVERTENCIA PARA QR NO ENCONTRADO -->
+        <div id="not-found-banner">
+          ⚠️ Este código QR no está registrado en la base de datos
+        </div>
+
         <div class="node-header">
           <div class="node-name" id="n">—</div>
           <div class="avail-badge" id="avail-badge">
@@ -233,10 +250,7 @@
             <div class="qr-code-label" id="qr-label">—</div>
             <button class="copy-btn" id="copyBtn" onclick="copiarQR()">Copiar código</button>
             <div class="coords" id="coords">—</div>
-            
-            <!-- AQUI SE MOSTRARÁ LA UBICACIÓN -->
             <div class="ubicacion-text" id="ubicacion">—</div>
-            
             <a class="maps-btn" id="mapsLink" href="#" target="_blank">Ver en Maps →</a>
           </div>
         </div>
@@ -271,7 +285,6 @@ function clean(str) {
   return (str || "").replace(/['"]/g, "").trim();
 }
 
-// ── LECTURA DESDE GITHUB (AUTOMÁTICA Y MANUAL) ──
 async function fetchCSVFromGitHub(showFeedback = false) {
   const btnHead = document.getElementById('btnUpdateHeader');
   
@@ -385,7 +398,6 @@ function initOffline() {
   }
 }
 
-// ── HISTORIAL ──
 function getHistory() {
   try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch { return []; }
 }
@@ -419,7 +431,6 @@ function buscarDirecto(q) {
   }
 }
 
-// ── QR ──
 function dibujarQR(texto) {
   if (!window.QRious) { setTimeout(() => dibujarQR(texto), 30); return; }
   new window.QRious({
@@ -432,7 +443,6 @@ function dibujarQR(texto) {
   });
 }
 
-// ── ESTADO UI ──
 function setLoading(on) {
   document.getElementById("skeleton").style.display = on ? "flex" : "none";
   if (on) document.getElementById("result").style.display = "none";
@@ -441,7 +451,6 @@ function setLoading(on) {
   btn.textContent = on ? "..." : "Buscar";
 }
 
-// ── BÚSQUEDA ──
 function buscar() {
   const input = document.getElementById("qrIn");
   const q = input.value.trim().toUpperCase().replace(/\s+/g, "");
@@ -454,27 +463,44 @@ function buscar() {
     const data = offlineData[q];
     
     if (data) {
-      renderOffline(data, q);
+      renderOffline(data, q, true);
       saveHistory(q);
       renderHistory();
       input.value = "";
       input.blur();
     } else {
-      alert("QR no encontrado en la base de datos.");
+      // Pasamos 'false' para indicar que no se encontró en la base
+      renderOffline(null, q, false);
       input.select();
     }
     setLoading(false);
   }, 150);
 }
 
-// ── RENDER ──
-function renderOffline(data, q) {
+// ── RENDER (Actualizado para manejar estado "No Encontrado") ──
+function renderOffline(data, q, isFound = true) {
+  const bannerError = document.getElementById("not-found-banner");
+  
+  if (!isFound) {
+    // Si no se encuentra, creamos datos por defecto vacíos para rellenar la interfaz
+    data = {
+      nombre: "DESCONOCIDO",
+      frame: "—", slot: "—", puerto: "—",
+      totalPuertos: 0,
+      cuentas: [],
+      latitud: "", longitud: "", ubicacion: ""
+    };
+    bannerError.style.display = "block"; // Mostrar el banner rojo
+  } else {
+    bannerError.style.display = "none";  // Ocultar el banner si todo está bien
+  }
+
   document.getElementById("n").textContent = data.nombre || "NODO SIN NOMBRE";
   document.getElementById("fsp-f").textContent = data.frame || "—";
   document.getElementById("fsp-s").textContent = data.slot  || "—";
   document.getElementById("fsp-p").textContent = data.puerto || "—";
 
-  const total = data.totalPuertos || 16;
+  const total = data.totalPuertos || 0;
   const ocupados = data.cuentas.length;
   const libres = Math.max(0, total - ocupados);
 
@@ -483,7 +509,8 @@ function renderOffline(data, q) {
 
   const badge = document.getElementById("avail-badge");
   const pct   = total ? libres / total : 0;
-  if (pct === 0) {
+  
+  if (!isFound || pct === 0) {
     badge.style.cssText = "background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.2)";
   } else if (pct < 0.3) {
     badge.style.cssText = "background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)";
@@ -500,9 +527,13 @@ function renderOffline(data, q) {
   const ubicacionEl = document.getElementById("ubicacion");
 
   // Rellenar ubicación
-  ubicacionEl.textContent = data.ubicacion ? `Ubicación: ${data.ubicacion}` : "Ubicación: (No especificada)";
+  if (!isFound) {
+    ubicacionEl.textContent = "Sin datos de ubicación";
+  } else {
+    ubicacionEl.textContent = data.ubicacion ? `Ubicación: ${data.ubicacion}` : "Ubicación: (No especificada)";
+  }
 
-  if (lat && lon) {
+  if (lat && lon && isFound) {
     coordsEl.textContent = `${lat}, ${lon}`;
     mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
     mapsLink.style.display = "inline-block";
@@ -545,7 +576,6 @@ function renderOffline(data, q) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// ── COPIAR QR ──
 function copiarQR() {
   if (!currentQR) return;
   navigator.clipboard.writeText(currentQR).then(() => {
@@ -559,12 +589,10 @@ function copiarQR() {
   });
 }
 
-// ── ENTER ──
 document.getElementById("qrIn").addEventListener("keypress", e => {
   if (e.key === "Enter") buscar();
 });
 
-// ── ESCÁNER ──
 let html5QrCode;
 
 async function startScan() {
