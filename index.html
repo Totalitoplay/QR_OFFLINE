@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR FINDER (OFFLINE)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap">
+
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --card: #111827;
+    --surface: #1a2234;
+    --accent: #22d3ee;
+    --accent-dim: rgba(34,211,238,0.12);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --text: #f1f5f9;
+    --muted: #64748b;
+    --border: rgba(255,255,255,0.07);
+    --border-hover: rgba(34,211,238,0.3);
+    --font: 'DM Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+  }
+  .wrap { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 12px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 18px 0 6px; }
+  .logo { font-size: 14px; font-weight: 500; letter-spacing: 3px; color: var(--accent); text-transform: uppercase; opacity: 0.8; }
+  .logo span { color: var(--muted); }
+  .search-row { display: flex; gap: 8px; }
+  .inp-wrap { position: relative; flex: 1; }
+  .inp-prefix { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--muted); pointer-events: none; letter-spacing: 1px; }
+  input[type=text] {
+    width: 100%; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 22px; font-weight: 500;
+    letter-spacing: 2px; padding: 18px 16px 18px 58px; border-radius: 14px;
+    outline: none; text-transform: uppercase; transition: border-color 0.15s;
+  }
+  input[type=text]:focus { border-color: var(--accent); }
+  input[type=text]::placeholder { font-size: 17px; letter-spacing: 1px; color: var(--muted); }
+  .btn-search {
+    background: var(--accent); color: #000; border: none; padding: 0 28px;
+    border-radius: 14px; cursor: pointer; font-family: var(--font); font-weight: 500;
+    font-size: 16px; letter-spacing: 2px; text-transform: uppercase;
+    transition: opacity 0.15s, transform 0.1s; white-space: nowrap;
+  }
+  .btn-search:hover { opacity: 0.85; }
+  .btn-search:active { transform: scale(0.97); }
+  .btn-search:disabled { opacity: 0.4; cursor: not-allowed; }
+  
+  .btn-update-csv {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--font); font-size: 12px; letter-spacing: 1px; padding: 6px 12px;
+    border-radius: 9px; cursor: pointer; transition: border-color 0.15s, color 0.15s; text-transform: uppercase;
+  }
+  .btn-update-csv:hover { border-color: var(--border-hover); color: var(--accent); }
+
+  .history-row { display: flex; gap: 8px; flex-wrap: wrap; min-height: 36px; }
+  .hist-chip {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--font); font-size: 14px; letter-spacing: 1.5px; padding: 7px 14px;
+    border-radius: 8px; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hist-chip:hover { border-color: var(--border-hover); color: var(--accent); }
+  .hist-chip .x { color: #475569; font-size: 13px; line-height: 1; padding: 0 2px; }
+  .hist-chip .x:hover { color: var(--red); }
+  .skeleton { display: none; flex-direction: column; gap: 10px; }
+  .skel-block {
+    background: linear-gradient(90deg, var(--surface) 25%, #1e2d40 50%, var(--surface) 75%);
+    background-size: 200% 100%; border-radius: 10px;
+    animation: shimmer 1.2s infinite;
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .result { display: none; flex-direction: column; gap: 10px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .node-header { padding: 24px 24px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .node-name { font-size: 28px; font-weight: 500; color: var(--accent); letter-spacing: -0.5px; line-height: 1.2; }
+  .avail-badge { flex-shrink: 0; font-size: 16px; font-weight: 500; padding: 10px 16px; border-radius: 10px; letter-spacing: 1px; text-align: center; line-height: 1.3; }
+  .avail-badge .count { font-size: 28px; display: block; }
+  .fsp-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; margin: 20px 0 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .fsp-block { padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; border-right: 1px solid var(--border); }
+  .fsp-block:last-child { border-right: none; }
+  .fsp-label { font-size: 12px; letter-spacing: 2.5px; color: var(--muted); text-transform: uppercase; }
+  .fsp-val { font-size: 38px; font-weight: 500; color: #fff; line-height: 1; }
+  .qr-row { display: flex; align-items: center; gap: 24px; padding: 22px 24px; }
+  #qr-canvas { border-radius: 12px; flex-shrink: 0; image-rendering: pixelated; }
+  .qr-info { flex: 1; }
+  .qr-code-label { font-size: 28px; font-weight: 500; letter-spacing: 3px; color: #fff; margin-bottom: 14px; }
+  .copy-btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    font-family: var(--font); font-size: 14px; letter-spacing: 1.5px; padding: 9px 16px;
+    border-radius: 9px; cursor: pointer; transition: border-color 0.15s, color 0.15s; text-transform: uppercase;
+  }
+  .copy-btn:hover { border-color: var(--border-hover); color: var(--accent); }
+  .copy-btn.copied { color: var(--green); border-color: rgba(52,211,153,0.3); }
+  .coords { font-size: 13px; color: var(--muted); margin-top: 10px; letter-spacing: 0.5px; }
+  .maps-btn {
+    display: inline-block; margin-top: 10px; padding: 8px 14px;
+    background: rgba(66,133,244,0.12); color: #60a5fa;
+    border: 1px solid rgba(66,133,244,0.2); text-decoration: none;
+    border-radius: 9px; font-size: 14px; letter-spacing: 1px; font-family: var(--font);
+    transition: background 0.15s;
+  }
+  .maps-btn:hover { background: rgba(66,133,244,0.22); }
+  .ports-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .ports-title { padding: 18px 24px; font-size: 14px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .ports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .port-cell { padding: 18px 20px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; transition: background 0.15s; }
+  .port-cell:hover { background: rgba(255,255,255,0.02); }
+  .port-cell.is-free { background: var(--green-dim); }
+  .port-num-label { font-size: 11px; letter-spacing: 2px; color: var(--muted); opacity: 0.7; text-transform: uppercase; }
+  .port-num { font-size: 16px; font-weight: 500; color: var(--muted); line-height: 1; letter-spacing: 1px; }
+  .port-status { font-size: 16px; font-weight: 500; letter-spacing: 0.5px; margin-top: 2px; }
+  .port-status.free { color: var(--green); font-size: 16px; letter-spacing: 2px; }
+  .port-status.occ { color: #e2e8f0; word-break: break-all; line-height: 1.3; }
+  
+  .btn-scan {
+    width: 100%; background: var(--accent-dim); color: var(--accent);
+    border: 1px dashed var(--accent); padding: 14px; border-radius: 14px;
+    cursor: pointer; font-family: var(--font); font-weight: 500;
+    font-size: 14px; letter-spacing: 2px; text-transform: uppercase;
+    transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+    gap: 10px; margin-bottom: 8px;
+  }
+  .btn-scan:hover { background: var(--accent); color: #000; border-style: solid; }
+  .btn-scan svg { width: 20px; height: 20px; fill: currentColor; }
+
+  /* Vista de Configuración Offline */
+  #setup-view {
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    padding: 40px 20px; background: var(--card); border-radius: 16px;
+    border: 1px dashed var(--muted); margin: 20px 0; text-align: center;
+  }
+  #setup-view h2 { color: var(--accent); font-weight: 500; font-size: 22px; letter-spacing: 1px; }
+  #setup-view p { color: var(--muted); margin: 15px 0 25px; font-size: 15px; line-height: 1.5; }
+  
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .anim { animation: fadeUp 0.25s ease forwards; }
+  
+  @media (max-width: 480px) {
+    .qr-row { flex-direction: column; align-items: flex-start; }
+    .node-name { font-size: 22px; }
+    .fsp-val { font-size: 30px; }
+    .ports-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+    input[type=text] { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="logo">GSA <span>//</span> Offline</div>
+    <!-- Botón oculto para el input -->
+    <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleFile(event)">
+    <button class="btn-update-csv" onclick="document.getElementById('csvFile').click()">↻ Actualizar CSV</button>
+  </header>
+
+  <!-- PANTALLA INICIAL SI NO HAY CSV -->
+  <div id="setup-view">
+    <h2>Base de datos vacía</h2>
+    <p>Para usar la aplicación sin internet, selecciona tu archivo <b>QROFFLINE.csv</b>.</p>
+    <button class="btn-search" onclick="document.getElementById('csvFile').click()">Cargar Archivo CSV</button>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL -->
+  <div id="app-view" style="display: none; width: 100%; flex-direction: column; gap: 12px;">
+    
+    <div id="reader-wrapper" style="display: none; width: 100%; margin-bottom: 12px;">
+      <div id="reader" style="border-radius: 16px; overflow: hidden; border: 1px solid var(--accent);"></div>
+      <button class="copy-btn" style="width: 100%; margin-top: 10px; color: var(--red);" onclick="stopScan()">
+        ✕ CANCELAR ESCANEO
+      </button>
+    </div>
+
+    <button class="btn-scan" id="btnScan" onclick="startScan()">
+      <svg viewBox="0 0 24 24"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2m8 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5m0 2a3 3 0 0 1 3 3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1 3-3Z"/></svg>
+      ESCANEAR QR
+    </button>
+    
+    <div class="search-row">
+      <div class="inp-wrap">
+        <span class="inp-prefix">TP ›</span>
+        <input type="text" id="qrIn" placeholder="Código de splitter..." autocomplete="off">
+      </div>
+      <button class="btn-search" id="btnSearch" onclick="buscar()">Buscar</button>
+    </div>
+
+    <div class="history-row" id="histRow"></div>
+
+    <div class="skeleton" id="skeleton">
+      <div class="skel-block" style="height:110px"></div>
+      <div class="skel-block" style="height:140px"></div>
+      <div class="skel-block" style="height:200px"></div>
+    </div>
+
+    <div class="result" id="result">
+      <div class="card anim">
+        <div class="node-header">
+          <div class="node-name" id="n">—</div>
+          <div class="avail-badge" id="avail-badge">
+            <span class="count" id="li">0</span>
+            <span>/ <span id="to">0</span> libres</span>
+          </div>
+        </div>
+        <div class="fsp-row">
+          <div class="fsp-block"><div class="fsp-label">Frame</div><div class="fsp-val" id="fsp-f">—</div></div>
+          <div class="fsp-block"><div class="fsp-label">Slot</div><div class="fsp-val" id="fsp-s">—</div></div>
+          <div class="fsp-block"><div class="fsp-label">Puerto</div><div class="fsp-val" id="fsp-p">—</div></div>
+        </div>
+        <div class="qr-row">
+          <canvas id="qr-canvas" width="160" height="160"></canvas>
+          <div class="qr-info">
+            <div class="qr-code-label" id="qr-label">—</div>
+            <button class="copy-btn" id="copyBtn" onclick="copiarQR()">Copiar código</button>
+            <div class="coords" id="coords">—</div>
+            <a class="maps-btn" id="mapsLink" href="#" target="_blank">Ver en Maps →</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="ports-card anim" style="animation-delay:0.05s">
+        <div class="ports-title">
+          <span>Puertos</span>
+          <span id="ports-summary">—</span>
+        </div>
+        <div class="ports-grid" id="portsGrid"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const HIST_KEY = "gsa_history";
+const MAX_HIST = 8;
+
+let currentQR = "";
+let offlineData = {}; // Aquí se guarda el CSV procesado en memoria
+
+// ── LIMPIADOR DE TEXTO ──
+function clean(str) {
+  return (str || "").replace(/['"]/g, "").trim();
+}
+
+// ── LECTURA DE CSV ──
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const text = evt.target.result;
+    try {
+      // Guardar localmente para que persista tras recargar la página
+      localStorage.setItem('qr_offline_csv', text);
+    } catch (err) {
+      console.warn("Archivo demasiado grande para localStorage. Se usará solo en memoria.");
+    }
+    processCSVData(text);
+  };
+  reader.readAsText(file);
+}
+
+function processCSVData(text) {
+  const delimiter = text.indexOf(';') > -1 ? ';' : ',';
+  const lines = text.split(/\r?\n/);
+  if (lines.length < 2) return;
+
+  // Detectar columnas por encabezados
+  const headers = lines[0].split(delimiter).map(h => clean(h).toUpperCase());
+  
+  const iQR     = Math.max(headers.findIndex(h => h.includes('QR')), 4);
+  const iOLT    = Math.max(headers.findIndex(h => h.includes('OLT')), 0);
+  const iF      = Math.max(headers.findIndex(h => h === 'F'), 1);
+  const iS      = Math.max(headers.findIndex(h => h === 'S'), 2);
+  const iP      = Math.max(headers.findIndex(h => h === 'P'), 3);
+  const iCuenta = Math.max(headers.findIndex(h => h.includes('CUENTA')), 5);
+  const iLat    = Math.max(headers.findIndex(h => h.includes('LATITUD')), 6);
+  const iLon    = Math.max(headers.findIndex(h => h.includes('LONGITUD')), 7);
+  const iCap    = Math.max(headers.findIndex(h => h.includes('CAPACIDAD')), 8);
+
+  offlineData = {};
+  let loadedCount = 0;
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(delimiter);
+    if (row.length < 5) continue; // Ignorar filas vacías
+
+    const qrRaw = clean(row[iQR]);
+    const qr = qrRaw.toUpperCase().replace(/\s+/g, "");
+    if (!qr) continue;
+
+    if (!offlineData[qr]) {
+      let totalPorts = 16; // Valor por defecto
+      const capStr = clean(row[iCap]);
+      if (capStr.includes(':')) {
+        totalPorts = parseInt(capStr.split(':')[1], 10);
+      } else if (parseInt(capStr) > 0) {
+        totalPorts = parseInt(capStr, 10);
+      }
+
+      offlineData[qr] = {
+        nombre: clean(row[iOLT]),
+        frame: clean(row[iF]),
+        slot: clean(row[iS]),
+        puerto: clean(row[iP]),
+        latitud: clean(row[iLat]),
+        longitud: clean(row[iLon]),
+        totalPuertos: totalPorts,
+        cuentas: []
+      };
+      loadedCount++;
+    }
+
+    const cuenta = clean(row[iCuenta]);
+    if (cuenta) {
+      offlineData[qr].cuentas.push(cuenta);
+    }
+  }
+
+  document.getElementById('setup-view').style.display = 'none';
+  document.getElementById('app-view').style.display = 'flex';
+  alert(`Base de datos offline cargada. QRs indexados: ${loadedCount}`);
+}
+
+function initOffline() {
+  const savedCsv = localStorage.getItem('qr_offline_csv');
+  if (savedCsv) {
+    processCSVData(savedCsv);
+  } else {
+    document.getElementById('setup-view').style.display = 'flex';
+    document.getElementById('app-view').style.display = 'none';
+  }
+}
+
+// ── HISTORIAL ──
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch { return []; }
+}
+function saveHistory(q) {
+  let h = getHistory().filter(x => x !== q);
+  h.unshift(q);
+  if (h.length > MAX_HIST) h = h.slice(0, MAX_HIST);
+  localStorage.setItem(HIST_KEY, JSON.stringify(h));
+}
+function removeHistory(q) {
+  const h = getHistory().filter(x => x !== q);
+  localStorage.setItem(HIST_KEY, JSON.stringify(h));
+  renderHistory();
+}
+function renderHistory() {
+  const row = document.getElementById("histRow");
+  const h = getHistory();
+  if (!h.length) { row.innerHTML = ""; return; }
+  row.innerHTML = h.map(q =>
+    `<div class="hist-chip" onclick="buscarDirecto('${q}')">
+      ${q}
+      <span class="x" onclick="event.stopPropagation(); removeHistory('${q}')">✕</span>
+    </div>`
+  ).join("");
+}
+function buscarDirecto(q) {
+  const input = document.getElementById("qrIn");
+  if (input) {
+    input.value = q;
+    buscar();
+  }
+}
+
+// ── QR ──
+function dibujarQR(texto) {
+  if (!window.QRious) { setTimeout(() => dibujarQR(texto), 30); return; }
+  new window.QRious({
+    element: document.getElementById("qr-canvas"),
+    value: texto,
+    size: 160,
+    level: "H",
+    background: "#ffffff",
+    foreground: "#000000"
+  });
+}
+
+// ── ESTADO UI ──
+function setLoading(on) {
+  document.getElementById("skeleton").style.display = on ? "flex" : "none";
+  if (on) document.getElementById("result").style.display = "none";
+  const btn = document.getElementById("btnSearch");
+  btn.disabled = on;
+  btn.textContent = on ? "..." : "Buscar";
+}
+
+// ── BÚSQUEDA OFFLINE ──
+function buscar() {
+  const input = document.getElementById("qrIn");
+  const q = input.value.trim().toUpperCase().replace(/\s+/g, "");
+  if (!q) { input.focus(); return; }
+
+  currentQR = q;
+  setLoading(true);
+
+  // Pequeño delay para simular carga y dar respuesta visual
+  setTimeout(() => {
+    const data = offlineData[q];
+    
+    if (data) {
+      renderOffline(data, q);
+      saveHistory(q);
+      renderHistory();
+      input.value = "";
+      input.blur();
+    } else {
+      alert("QR no encontrado en la base de datos (QROFFLINE.csv).");
+      input.select();
+    }
+    setLoading(false);
+  }, 150);
+}
+
+// ── RENDER ──
+function renderOffline(data, q) {
+  document.getElementById("n").textContent = data.nombre || "NODO SIN NOMBRE";
+  document.getElementById("fsp-f").textContent = data.frame || "—";
+  document.getElementById("fsp-s").textContent = data.slot  || "—";
+  document.getElementById("fsp-p").textContent = data.puerto || "—";
+
+  const total = data.totalPuertos || 16;
+  const ocupados = data.cuentas.length;
+  const libres = Math.max(0, total - ocupados);
+
+  document.getElementById("li").textContent = libres;
+  document.getElementById("to").textContent = total;
+
+  const badge = document.getElementById("avail-badge");
+  const pct   = total ? libres / total : 0;
+  if (pct === 0) {
+    badge.style.cssText = "background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.2)";
+  } else if (pct < 0.3) {
+    badge.style.cssText = "background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)";
+  } else {
+    badge.style.cssText = "background:var(--green-dim);color:var(--green);border:1px solid rgba(52,211,153,0.2)";
+  }
+
+  document.getElementById("qr-label").textContent = q;
+  dibujarQR(q);
+
+  const lat = data.latitud, lon = data.longitud;
+  const coordsEl = document.getElementById("coords");
+  const mapsLink = document.getElementById("mapsLink");
+
+  if (lat && lon) {
+    coordsEl.textContent = `${lat}, ${lon}`;
+    mapsLink.href = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+    mapsLink.style.display = "inline-block";
+  } else {
+    coordsEl.textContent = "Coordenadas no disponibles";
+    mapsLink.style.display = "none";
+  }
+  
+  document.getElementById("ports-summary").textContent = `${libres} libre${libres !== 1 ? "s" : ""} de ${total}`;
+
+  // Lógica de Puertos secuencial
+  const grid = document.getElementById("portsGrid");
+  const frag  = document.createDocumentFragment();
+
+  for (let i = 1; i <= total; i++) {
+    // Si hay una cuenta en el array para este índice, el puerto se marca ocupado
+    const cuenta = data.cuentas[i - 1]; 
+    const libre = !cuenta;
+    
+    const cell  = document.createElement("div");
+    cell.className = "port-cell" + (libre ? " is-free" : "");
+
+    const lbl = document.createElement("div");
+    lbl.className   = "port-num-label";
+    lbl.textContent = "Puerto";
+
+    const num = document.createElement("div");
+    num.className   = "port-num";
+    num.textContent = i;
+
+    const st = document.createElement("div");
+    st.className   = "port-status " + (libre ? "free" : "occ");
+    st.textContent = libre ? "LIBRE" : cuenta;
+
+    cell.append(lbl, num, st);
+    frag.appendChild(cell);
+  }
+
+  grid.replaceChildren(frag);
+  
+  document.getElementById("result").style.display = "flex";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ── COPIAR QR ──
+function copiarQR() {
+  if (!currentQR) return;
+  navigator.clipboard.writeText(currentQR).then(() => {
+    const btn = document.getElementById("copyBtn");
+    btn.textContent = "¡Copiado!";
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.textContent = "Copiar código";
+      btn.classList.remove("copied");
+    }, 1800);
+  });
+}
+
+// ── ENTER ──
+document.getElementById("qrIn").addEventListener("keypress", e => {
+  if (e.key === "Enter") buscar();
+});
+
+// ── ESCÁNER ──
+let html5QrCode;
+
+async function startScan() {
+  document.getElementById("reader-wrapper").style.display = "block";
+  document.getElementById("btnScan").style.display = "none";
+  
+  html5QrCode = new Html5Qrcode("reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+  try {
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      (decodedText) => {
+        document.getElementById("qrIn").value = decodedText;
+        stopScan();
+        buscar();
+      },
+      (errorMessage) => {}
+    );
+  } catch (err) {
+    console.error("Error cámara:", err);
+    alert("No se pudo acceder a la cámara.");
+    stopScan();
+  }
+}
+
+function stopScan() {
+  if (html5QrCode) {
+    html5QrCode.stop().then(() => {
+      document.getElementById("reader-wrapper").style.display = "none";
+      document.getElementById("btnScan").style.display = "flex";
+    }).catch(err => console.error(err));
+  }
+}
+
+// ── INIT ──
+renderHistory();
+initOffline();
+
+</script>
+</body>
+</html>
