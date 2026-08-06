@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QR FINDER (AUTO SYNC)</title>
+<title>QR FINDER (CF SYNC)</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,7 +92,6 @@
   .result { display: none; flex-direction: column; gap: 10px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; position: relative; }
   
-  /* ESTILO PARA EL BANNER DE ERROR */
   #not-found-banner {
     display: none;
     background: rgba(248,113,113,0.15);
@@ -186,12 +185,12 @@
 
   <header>
     <div class="logo">GSA <span>//</span> Sync</div>
-    <button class="btn-update-csv" id="btnUpdateHeader" onclick="fetchCSVFromGitHub(true)">↻ Actualizar Base</button>
+    <button class="btn-update-csv" id="btnUpdateHeader" onclick="fetchCSVFromCloudflare(true)">↻ Actualizar Base</button>
   </header>
 
   <div id="setup-view">
     <h2>Sincronizando...</h2>
-    <p>Descargando base de datos desde GitHub, por favor espera.</p>
+    <p>Descargando base de datos, por favor espera.</p>
   </div>
 
   <div id="app-view" style="display: none; width: 100%; flex-direction: column; gap: 12px;">
@@ -227,7 +226,6 @@
     <div class="result" id="result">
       <div class="card anim">
         
-        <!-- BANNER DE ADVERTENCIA PARA QR NO ENCONTRADO -->
         <div id="not-found-banner">
           ⚠️ Este código QR no está registrado en la base de datos
         </div>
@@ -270,9 +268,9 @@
 
 <script>
 // =========================================================================
-// AQUÍ DEBE IR TU ENLACE RAW DE GITHUB
+// AQUÍ DEBES PONER LA URL DEL WORKER DE CLOUDFLARE QUE CREASTE EN EL PASO 1
 // =========================================================================
-const GITHUB_CSV_URL = "https://raw.githubusercontent.com/Totalitoplay/QR_OFFLINE/refs/heads/main/QROFFLINE.csv"; 
+const CLOUDFLARE_WORKER_URL = "https://qr-offline.playtotalito.workers.dev/"; 
 // =========================================================================
 
 const HIST_KEY = "gsa_history";
@@ -285,13 +283,13 @@ function clean(str) {
   return (str || "").replace(/['"]/g, "").trim();
 }
 
-async function fetchCSVFromGitHub(showFeedback = false) {
+async function fetchCSVFromCloudflare(showFeedback = false) {
   const btnHead = document.getElementById('btnUpdateHeader');
   
   if (btnHead) btnHead.textContent = "Descargando...";
 
   try {
-    const response = await fetch(`${GITHUB_CSV_URL}?t=${new Date().getTime()}`);
+    const response = await fetch(`${CLOUDFLARE_WORKER_URL}?t=${new Date().getTime()}`);
     if (!response.ok) throw new Error("Error HTTP: " + response.status);
     
     const text = await response.text();
@@ -307,7 +305,7 @@ async function fetchCSVFromGitHub(showFeedback = false) {
   } catch (error) {
     console.error(error);
     if (showFeedback) {
-      alert("Error al descargar. Asegúrate de tener internet y usar un enlace Raw.");
+      alert("Error al descargar. Asegúrate de tener internet y que tu Worker esté activo.");
     } else {
       const savedCsv = localStorage.getItem('qr_offline_csv');
       if (!savedCsv) {
@@ -390,11 +388,11 @@ function initOffline() {
   
   if (savedCsv) {
     processCSVData(savedCsv, false);
-    fetchCSVFromGitHub(false);
+    fetchCSVFromCloudflare(false);
   } else {
     document.getElementById('setup-view').style.display = 'flex';
     document.getElementById('app-view').style.display = 'none';
-    fetchCSVFromGitHub(false);
+    fetchCSVFromCloudflare(false);
   }
 }
 
@@ -469,7 +467,6 @@ function buscar() {
       input.value = "";
       input.blur();
     } else {
-      // Pasamos 'false' para indicar que no se encontró en la base
       renderOffline(null, q, false);
       input.select();
     }
@@ -477,12 +474,10 @@ function buscar() {
   }, 150);
 }
 
-// ── RENDER (Actualizado para manejar estado "No Encontrado") ──
 function renderOffline(data, q, isFound = true) {
   const bannerError = document.getElementById("not-found-banner");
   
   if (!isFound) {
-    // Si no se encuentra, creamos datos por defecto vacíos para rellenar la interfaz
     data = {
       nombre: "DESCONOCIDO",
       frame: "—", slot: "—", puerto: "—",
@@ -490,9 +485,9 @@ function renderOffline(data, q, isFound = true) {
       cuentas: [],
       latitud: "", longitud: "", ubicacion: ""
     };
-    bannerError.style.display = "block"; // Mostrar el banner rojo
+    bannerError.style.display = "block";
   } else {
-    bannerError.style.display = "none";  // Ocultar el banner si todo está bien
+    bannerError.style.display = "none";
   }
 
   document.getElementById("n").textContent = data.nombre || "NODO SIN NOMBRE";
@@ -526,7 +521,6 @@ function renderOffline(data, q, isFound = true) {
   const mapsLink = document.getElementById("mapsLink");
   const ubicacionEl = document.getElementById("ubicacion");
 
-  // Rellenar ubicación
   if (!isFound) {
     ubicacionEl.textContent = "Sin datos de ubicación";
   } else {
@@ -629,7 +623,6 @@ function stopScan() {
   }
 }
 
-// ── INIT ──
 renderHistory();
 initOffline();
 
