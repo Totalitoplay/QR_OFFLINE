@@ -112,8 +112,12 @@
   .copy-btn:hover { border-color: var(--border-hover); color: var(--accent); }
   .copy-btn.copied { color: var(--green); border-color: rgba(52,211,153,0.3); }
   .coords { font-size: 13px; color: var(--muted); margin-top: 10px; letter-spacing: 0.5px; }
+  
+  /* Nuevo estilo para la ubicación */
+  .ubicacion-text { font-size: 13px; color: var(--accent); margin-top: 6px; letter-spacing: 0.5px; font-weight: 500; }
+  
   .maps-btn {
-    display: inline-block; margin-top: 10px; padding: 8px 14px;
+    display: inline-block; margin-top: 12px; padding: 8px 14px;
     background: rgba(66,133,244,0.12); color: #60a5fa;
     border: 1px solid rgba(66,133,244,0.2); text-decoration: none;
     border-radius: 9px; font-size: 14px; letter-spacing: 1px; font-family: var(--font);
@@ -229,6 +233,10 @@
             <div class="qr-code-label" id="qr-label">—</div>
             <button class="copy-btn" id="copyBtn" onclick="copiarQR()">Copiar código</button>
             <div class="coords" id="coords">—</div>
+            
+            <!-- AQUI SE MOSTRARÁ LA UBICACIÓN -->
+            <div class="ubicacion-text" id="ubicacion">—</div>
+            
             <a class="maps-btn" id="mapsLink" href="#" target="_blank">Ver en Maps →</a>
           </div>
         </div>
@@ -288,7 +296,6 @@ async function fetchCSVFromGitHub(showFeedback = false) {
     if (showFeedback) {
       alert("Error al descargar. Asegúrate de tener internet y usar un enlace Raw.");
     } else {
-      // Si falla en automático y no hay datos locales, avisar
       const savedCsv = localStorage.getItem('qr_offline_csv');
       if (!savedCsv) {
         document.getElementById('setup-view').innerHTML = "<h2>Sin conexión</h2><p>No se pudo descargar la base de datos y no hay datos guardados.</p>";
@@ -306,15 +313,16 @@ function processCSVData(text, showFeedback = false) {
 
   const headers = lines[0].split(delimiter).map(h => clean(h).toUpperCase());
   
-  const iQR     = Math.max(headers.findIndex(h => h.includes('QR')), 4);
-  const iOLT    = Math.max(headers.findIndex(h => h.includes('OLT')), 0);
-  const iF      = Math.max(headers.findIndex(h => h === 'F'), 1);
-  const iS      = Math.max(headers.findIndex(h => h === 'S'), 2);
-  const iP      = Math.max(headers.findIndex(h => h === 'P'), 3);
-  const iCuenta = Math.max(headers.findIndex(h => h.includes('CUENTA')), 5);
-  const iLat    = Math.max(headers.findIndex(h => h.includes('LATITUD')), 6);
-  const iLon    = Math.max(headers.findIndex(h => h.includes('LONGITUD')), 7);
-  const iCap    = Math.max(headers.findIndex(h => h.includes('CAPACIDAD')), 8);
+  const iQR        = Math.max(headers.findIndex(h => h.includes('QR')), 4);
+  const iOLT       = Math.max(headers.findIndex(h => h.includes('OLT')), 0);
+  const iF         = Math.max(headers.findIndex(h => h === 'F'), 1);
+  const iS         = Math.max(headers.findIndex(h => h === 'S'), 2);
+  const iP         = Math.max(headers.findIndex(h => h === 'P'), 3);
+  const iCuenta    = Math.max(headers.findIndex(h => h.includes('CUENTA')), 5);
+  const iLat       = Math.max(headers.findIndex(h => h.includes('LATITUD')), 6);
+  const iLon       = Math.max(headers.findIndex(h => h.includes('LONGITUD')), 7);
+  const iCap       = Math.max(headers.findIndex(h => h.includes('CAPACIDAD')), 8);
+  const iUbicacion = headers.findIndex(h => h.includes('UBICACION') || h.includes('UBICACIÓN'));
 
   offlineData = {};
   let loadedCount = 0;
@@ -343,6 +351,7 @@ function processCSVData(text, showFeedback = false) {
         puerto: clean(row[iP]),
         latitud: clean(row[iLat]),
         longitud: clean(row[iLon]),
+        ubicacion: iUbicacion !== -1 ? clean(row[iUbicacion]) : "",
         totalPuertos: totalPorts,
         cuentas: []
       };
@@ -355,7 +364,6 @@ function processCSVData(text, showFeedback = false) {
     }
   }
 
-  // Ocultar pantalla de carga y mostrar app
   document.getElementById('setup-view').style.display = 'none';
   document.getElementById('app-view').style.display = 'flex';
   
@@ -368,12 +376,9 @@ function initOffline() {
   const savedCsv = localStorage.getItem('qr_offline_csv');
   
   if (savedCsv) {
-    // Si ya tiene datos guardados, cargar rápido la interfaz para no hacer esperar
     processCSVData(savedCsv, false);
-    // Y luego sincronizar en el fondo silenciosamente
     fetchCSVFromGitHub(false);
   } else {
-    // Si es la primera vez que entra, mostrar pantalla de carga y descargar
     document.getElementById('setup-view').style.display = 'flex';
     document.getElementById('app-view').style.display = 'none';
     fetchCSVFromGitHub(false);
@@ -492,6 +497,10 @@ function renderOffline(data, q) {
   const lat = data.latitud, lon = data.longitud;
   const coordsEl = document.getElementById("coords");
   const mapsLink = document.getElementById("mapsLink");
+  const ubicacionEl = document.getElementById("ubicacion");
+
+  // Rellenar ubicación
+  ubicacionEl.textContent = data.ubicacion ? `Ubicación: ${data.ubicacion}` : "Ubicación: (No especificada)";
 
   if (lat && lon) {
     coordsEl.textContent = `${lat}, ${lon}`;
