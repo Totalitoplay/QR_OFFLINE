@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QR FINDER (OFFLINE)</title>
+<title>QR FINDER (GITHUB SYNC)</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -143,7 +143,6 @@
   .btn-scan:hover { background: var(--accent); color: #000; border-style: solid; }
   .btn-scan svg { width: 20px; height: 20px; fill: currentColor; }
 
-  /* Vista de Configuración Offline */
   #setup-view {
     display: none; flex-direction: column; align-items: center; justify-content: center;
     padding: 40px 20px; background: var(--card); border-radius: 16px;
@@ -168,17 +167,15 @@
 <div class="wrap">
 
   <header>
-    <div class="logo">GSA <span>//</span> Offline</div>
-    <!-- Botón oculto para el input -->
-    <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleFile(event)">
-    <button class="btn-update-csv" onclick="document.getElementById('csvFile').click()">↻ Actualizar CSV</button>
+    <div class="logo">GSA <span>//</span> Sync</div>
+    <button class="btn-update-csv" id="btnUpdateHeader" onclick="fetchCSVFromGitHub()">↻ Sincronizar GitHub</button>
   </header>
 
-  <!-- PANTALLA INICIAL SI NO HAY CSV -->
+  <!-- PANTALLA INICIAL SI NO HAY DATOS -->
   <div id="setup-view">
     <h2>Base de datos vacía</h2>
-    <p>Para usar la aplicación sin internet, selecciona tu archivo <b>QROFFLINE.csv</b>.</p>
-    <button class="btn-search" onclick="document.getElementById('csvFile').click()">Cargar Archivo CSV</button>
+    <p>Para usar la aplicación, descarga la base de datos de QRs más reciente desde el repositorio.</p>
+    <button class="btn-search" id="btnDownload" onclick="fetchCSVFromGitHub()">Descargar Datos</button>
   </div>
 
   <!-- APLICACIÓN PRINCIPAL -->
@@ -250,41 +247,59 @@
 </div>
 
 <script>
+// =========================================================================
+// REEMPLAZA ESTA URL POR EL ENLACE "RAW" DE TU ARCHIVO EN GITHUB
+// =========================================================================
+const GITHUB_CSV_URL = "https://raw.githubusercontent.com/Totalitoplay/QR_OFFLINE/refs/heads/main/QROFFLINE.csv"; 
+// =========================================================================
+
 const HIST_KEY = "gsa_history";
 const MAX_HIST = 8;
 
 let currentQR = "";
-let offlineData = {}; // Aquí se guarda el CSV procesado en memoria
+let offlineData = {}; 
 
-// ── LIMPIADOR DE TEXTO ──
 function clean(str) {
   return (str || "").replace(/['"]/g, "").trim();
 }
 
-// ── LECTURA DE CSV ──
-function handleFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt) {
-    const text = evt.target.result;
+// ── LECTURA DESDE GITHUB ──
+async function fetchCSVFromGitHub() {
+  const btnHead = document.getElementById('btnUpdateHeader');
+  const btnSetup = document.getElementById('btnDownload');
+  
+  if (btnHead) btnHead.textContent = "Descargando...";
+  if (btnSetup) btnSetup.textContent = "Descargando...";
+
+  try {
+    // Añadimos un parámetro de tiempo para evitar que el navegador use una versión vieja en caché
+    const response = await fetch(`${GITHUB_CSV_URL}?t=${new Date().getTime()}`);
+    if (!response.ok) throw new Error("Error HTTP: " + response.status);
+    
+    const text = await response.text();
+    
     try {
-      // Guardar localmente para que persista tras recargar la página
       localStorage.setItem('qr_offline_csv', text);
     } catch (err) {
-      console.warn("Archivo demasiado grande para localStorage. Se usará solo en memoria.");
+      console.warn("Archivo grande para localStorage. Se usará solo en memoria.");
     }
-    processCSVData(text);
-  };
-  reader.readAsText(file);
+    
+    processCSVData(text, true);
+    
+  } catch (error) {
+    console.error(error);
+    alert("Error al descargar de GitHub. Revisa tu conexión y que la URL sea correcta (formato Raw).");
+  } finally {
+    if (btnHead) btnHead.textContent = "↻ Sincronizar GitHub";
+    if (btnSetup) btnSetup.textContent = "Descargar Datos";
+  }
 }
 
-function processCSVData(text) {
+function processCSVData(text, showSuccess = false) {
   const delimiter = text.indexOf(';') > -1 ? ';' : ',';
   const lines = text.split(/\r?\n/);
   if (lines.length < 2) return;
 
-  // Detectar columnas por encabezados
   const headers = lines[0].split(delimiter).map(h => clean(h).toUpperCase());
   
   const iQR     = Math.max(headers.findIndex(h => h.includes('QR')), 4);
@@ -302,14 +317,14 @@ function processCSVData(text) {
 
   for (let i = 1; i < lines.length; i++) {
     const row = lines[i].split(delimiter);
-    if (row.length < 5) continue; // Ignorar filas vacías
+    if (row.length < 5) continue;
 
     const qrRaw = clean(row[iQR]);
     const qr = qrRaw.toUpperCase().replace(/\s+/g, "");
     if (!qr) continue;
 
     if (!offlineData[qr]) {
-      let totalPorts = 16; // Valor por defecto
+      let totalPorts = 16; 
       const capStr = clean(row[iCap]);
       if (capStr.includes(':')) {
         totalPorts = parseInt(capStr.split(':')[1], 10);
@@ -338,7 +353,10 @@ function processCSVData(text) {
 
   document.getElementById('setup-view').style.display = 'none';
   document.getElementById('app-view').style.display = 'flex';
-  alert(`Base de datos offline cargada. QRs indexados: ${loadedCount}`);
+  
+  if(showSuccess) {
+    alert(`Sincronización exitosa. QRs indexados: ${loadedCount}`);
+  }
 }
 
 function initOffline() {
@@ -407,7 +425,7 @@ function setLoading(on) {
   btn.textContent = on ? "..." : "Buscar";
 }
 
-// ── BÚSQUEDA OFFLINE ──
+// ── BÚSQUEDA ──
 function buscar() {
   const input = document.getElementById("qrIn");
   const q = input.value.trim().toUpperCase().replace(/\s+/g, "");
@@ -416,7 +434,6 @@ function buscar() {
   currentQR = q;
   setLoading(true);
 
-  // Pequeño delay para simular carga y dar respuesta visual
   setTimeout(() => {
     const data = offlineData[q];
     
@@ -427,7 +444,7 @@ function buscar() {
       input.value = "";
       input.blur();
     } else {
-      alert("QR no encontrado en la base de datos (QROFFLINE.csv).");
+      alert("QR no encontrado en la base de datos.");
       input.select();
     }
     setLoading(false);
@@ -476,12 +493,10 @@ function renderOffline(data, q) {
   
   document.getElementById("ports-summary").textContent = `${libres} libre${libres !== 1 ? "s" : ""} de ${total}`;
 
-  // Lógica de Puertos secuencial
   const grid = document.getElementById("portsGrid");
   const frag  = document.createDocumentFragment();
 
   for (let i = 1; i <= total; i++) {
-    // Si hay una cuenta en el array para este índice, el puerto se marca ocupado
     const cuenta = data.cuentas[i - 1]; 
     const libre = !cuenta;
     
